@@ -115,15 +115,14 @@ ls -ld /u01/app/19.0.0.0/grid/OPatch
 ## A4. Analyze
 
 ```bash
-export PATH=$PATH:/u01/app/19.0.0.0/grid/OPatch
 cd /acfs01/acfs/evolutivos
-opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid -analyze
+/u01/app/19.0.0.0/grid/OPatch/opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid -analyze
 ```
 
 ## A5. Apply
 
 ```bash
-opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid
+/u01/app/19.0.0.0/grid/OPatch/opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid
 ```
 
 ## A6. Comprobar
