@@ -155,7 +155,7 @@ sudo su - oracle
 
 ```bash
 mv /u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch /u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch_old_20261008
-unzip -q /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip -d /u02/app/oracle/product/19.0.0.0/dbhome_1
+unzip /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip -d /u02/app/oracle/product/19.0.0.0/dbhome_1
 ls -ld /u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch
 /u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch/opatch version
 ```
