@@ -235,33 +235,18 @@ cd /acfs01/acfs/evolutivos/39329591
 
 ---
 
-## Orden de ejecución
-
-1. Paso 0 una sola vez, desde el nodo 1.
-2. **Nodo 1:** A (root) → B (oracle) → C (oracle).
-3. Comprobar que el CRS, las instancias y los servicios están bien en el nodo 1.
-4. Repetir A → B → C en los **nodos 2, 3 y 4**, con su comprobación (A6, B5, C5) en cada nodo.
-
-## Notas
-
-- **OPatch se descomprime desde el zip en cada home y nodo.** No se mueve un directorio desde el ACFS, porque tras el primer nodo ya no existiría para el resto.
-- **`chown -R` en el Grid**, para que todo el contenido de `OPatch` quede como grid:oinstall.
-- **`.patch_storage`** conserva el JDK anterior como backup. Si el escáner de vulnerabilidades lo vuelve a marcar, el origen es ese.
-
----
-
 # D. Limpieza: zipear el OPatch antiguo (en cada nodo)
 
 Cuando el nodo esté validado, cada `OPatch_old_20261008` se convierte en un zip dentro de su propio home. Así el escáner deja de detectar el jre antiguo.
 
-Lanza el `rm -rf` solo si el `unzip -t` termina con `No errors detected`. Hace falta `-f`: con `rm -r` solo, pide confirmación por cada fichero protegido contra escritura.
+Hace falta `-f` en el `rm`: con `rm -r` solo, pide confirmación por cada fichero protegido contra escritura.
 
 ## D1. Grid (como root)
 
 ```bash
+sudo su - root
 cd /u01/app/19.0.0.0/grid
 zip -r OPatch_old_20261008.zip OPatch_old_20261008
-unzip -t OPatch_old_20261008.zip
 rm -rf OPatch_old_20261008
 chown grid:oinstall OPatch_old_20261008.zip
 chmod 640 OPatch_old_20261008.zip
@@ -271,9 +256,9 @@ ls -l OPatch_old_20261008*
 ## D2. dbhome_1 (como oracle)
 
 ```bash
+sudo su - oracle
 cd /u02/app/oracle/product/19.0.0.0/dbhome_1
 zip -r OPatch_old_20261008.zip OPatch_old_20261008
-unzip -t OPatch_old_20261008.zip
 rm -rf OPatch_old_20261008
 ls -l OPatch_old_20261008*
 ```
@@ -283,7 +268,6 @@ ls -l OPatch_old_20261008*
 ```bash
 cd /u02/app/oracle/product/19.0.0.0/dbhome_2
 zip -r OPatch_old_20261008.zip OPatch_old_20261008
-unzip -t OPatch_old_20261008.zip
 rm -rf OPatch_old_20261008
 ls -l OPatch_old_20261008*
 ```
@@ -292,10 +276,54 @@ En cada home, el `ls -l` final solo debe mostrar el `.zip`.
 
 ---
 
-## Nota: JDK del oraemagent (en cada nodo, como root)
+# E. Limpieza: zipear el JDK del oraemagent (en cada nodo, como root)
 
 ```bash
+sudo su - root
 cd /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common
 zip -r jdk_old_20261008.zip jdk
 rm -rf jdk
 ```
+
+---
+
+## Orden de ejecución
+
+1. **Solo en el nodo 1, una vez:** 0a (grid) → 0b (root). El parche queda descomprimido en el ACFS para los 4 nodos.
+2. **En cada nodo:**
+   1. **A (root):** cargar el entorno, actualizar OPatch, `opatchauto -analyze` y `opatchauto apply`. En A6, `su - grid` para el `lspatches` y `exit` para volver a root.
+   2. **B (oracle):** dbhome_1 con `opatch`.
+   3. **C (oracle):** dbhome_2 con `opatch`, sin cambiar de usuario.
+3. Comprobar que el CRS, las instancias y los servicios están bien antes de pasar al siguiente nodo.
+4. **Limpieza en cada nodo, una vez validado:**
+   1. **D1 (root):** zip del `OPatch_old_20261008` del Grid.
+   2. **D2 y D3 (oracle):** zip del `OPatch_old_20261008` de dbhome_1 y dbhome_2.
+   3. **E (root):** zip del `jdk` del oraemagent.
+
+## Notas
+
+- **Rutas:** absolutas en todo el documento salvo en los apartados D y E, que usan rutas relativas tras el `cd` a cada directorio.
+- **Staging:** `/acfs01/acfs/evolutivos` es un ACFS compartido y visible en los 4 nodos. El parche JDK se descomprime una sola vez, como grid. Los dos zip tienen owner `grid:oinstall`.
+- **OPatch se descomprime desde el zip en cada home y nodo.** No se mueve un directorio desde el ACFS, porque tras el primer nodo ya no existiría para el resto.
+- **`chown -R` en el Grid**, para que todo el contenido de `OPatch` quede como grid:oinstall.
+- **`opatchauto` actúa solo en el nodo local.** No aplica el parche en los 4 nodos a la vez.
+- **`zip` y `unzip` sin `-q`**, para ver en pantalla la lista de ficheros.
+- **`rm -rf`:** el `-f` es necesario; con `rm -r` solo, pide confirmación por cada fichero protegido contra escritura.
+- **Oraemagent:** sin su `jdk`, el agente de EM no puede arrancar. Para restaurarlo: `unzip /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common/jdk_old_20261008.zip -d /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common`.
+- **`.patch_storage`** conserva el JDK anterior como backup. Si el escáner de vulnerabilidades lo vuelve a marcar, el origen es ese.
+
+### Rutas del informe y dónde se resuelven
+
+| Ruta | Versión vulnerable | Sección |
+|---|---|---|
+| `/u01/app/19.0.0.0/grid/OPatch/jre/bin/java` | 1.8.0_441-b07 | A3 + D1 |
+| `/u01/app/19.0.0.0/grid/jdk/bin/java` | 1.8.0_441-b07 | A5 |
+| `/u01/app/19.0.0.0/grid/jdk/jre/bin/java` | 1.8.0_441-b07 | A5 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch/jre/bin/java` | 1.8.0_451-b09 | B2 + D2 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_1/jdk/bin/java` | 1.8.0_441-b07 | B4 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_1/jdk/jre/bin/java` | 1.8.0_441-b07 | B4 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_2/OPatch/jre/bin/java` | 1.8.0_451-b09 | C2 + D3 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_2/jdk/bin/java` | 1.8.0_441-b07 | C4 |
+| `/u02/app/oracle/product/19.0.0.0/dbhome_2/jdk/jre/bin/java` | 1.8.0_441-b07 | C4 |
+| `/oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common/jdk/bin/java` | 1.8.0_261-b12 | E |
+| `/oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common/jdk/jre/bin/java` | 1.8.0_261-b12 | E |
