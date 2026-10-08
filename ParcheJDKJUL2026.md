@@ -1,3 +1,5 @@
+# Parche JDK JUL2026 – ExaCC 4 nodos
+
 ## Alcance
 
 | Home | Método | Usuario |
@@ -22,26 +24,56 @@ Staging en ACFS compartido (visible en los 4 nodos): **`/acfs01/acfs/evolutivos`
 
 - **Nodo a nodo:** se termina un nodo completo (Grid + dbhome_1 + dbhome_2) antes de pasar al siguiente.
 - **Si el analyze o un precheck falla, no se lanza el apply.**
-- **Usuarios:** desde `exaopc` se entra con `sudo su - root` o `sudo su - oracle` según el bloque.
+- **Permisos:** `chmod` siempre en formato numérico.
+
+## Secuencia de usuarios (desde `exaopc`)
+
+| Orden | Usuario | Cómo se entra | Qué se hace |
+|---|---|---|---|
+| 1 | **grid** | `sudo su - grid` | Paso 0a: descomprimir el parche JDK en el ACFS (solo nodo 1) |
+| 2 | **root** | `sudo su - root` | Paso 0b: owner de los zip (solo nodo 1) + Bloque A: Grid con `opatchauto` |
+| 3 | **oracle** | `sudo su - oracle` | Bloques B y C: dbhome_1 y dbhome_2 con `opatch` |
+
+En los nodos 2, 3 y 4 se empieza directamente en el paso 2 (root, bloque A).
 
 ---
 
-## 0. Preparar el staging (una sola vez, desde el nodo 1)
-
-Los zip ya están descargados en `/acfs01/acfs/evolutivos`.
-
-Como **oracle**:
+## 0a. Descomprimir el parche JDK (como grid, solo nodo 1)
 
 ```bash
-unzip -qo /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip -d /acfs01/acfs/evolutivos
-chmod -R o+rx /acfs01/acfs/evolutivos/39329591
-chmod o+r /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip
+sudo su - grid
 ```
 
-Comprobar que los 4 nodos ven el parche:
+```bash
+mv /acfs01/acfs/evolutivos/39329591 /acfs01/acfs/evolutivos/39329591_old_20261008
+unzip -q /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip -d /acfs01/acfs/evolutivos
+ls -ld /acfs01/acfs/evolutivos/39329591
+exit
+```
+
+- El `mv` aparta el directorio `39329591` del 26 de junio, que ya existía, para descomprimir uno limpio desde el zip.
+- Al descomprimir como grid, el directorio `39329591` ya queda con owner **grid**. Como oracle está en el grupo **oinstall**, puede leerlo.
+
+## 0b. Owner de los zip (como root, solo nodo 1)
 
 ```bash
-dcli -l oracle -g ~/dbs_group "ls -ld /acfs01/acfs/evolutivos/39329591"
+sudo su - root
+```
+
+```bash
+chown grid:oinstall /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip
+chown grid:oinstall /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip
+chmod 755 /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip
+chmod 755 /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip
+ls -l /acfs01/acfs/evolutivos
+```
+
+Sin salir de root, se continúa con el bloque A.
+
+En los nodos 2, 3 y 4, antes del bloque A, comprobar que se ve el parche:
+
+```bash
+ls -ld /acfs01/acfs/evolutivos/39329591
 ```
 
 ---
@@ -49,6 +81,8 @@ dcli -l oracle -g ~/dbs_group "ls -ld /acfs01/acfs/evolutivos/39329591"
 # A. GRID — `/u01/app/19.0.0.0/grid` (opatchauto, como root)
 
 ## A1. Cargar el entorno (como root)
+
+En el nodo 1 ya estás como root tras el paso 0b. En los nodos 2, 3 y 4, entrar primero con `sudo su - root`.
 
 ```bash
 cd /home/grid
@@ -109,6 +143,10 @@ opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid
 ## B1. Versión actual
 
 ```bash
+sudo su - oracle
+```
+
+```bash
 /u02/app/oracle/product/19.0.0.0/dbhome_1/OPatch/opatch version
 /u02/app/oracle/product/19.0.0.0/dbhome_1/jdk/bin/java -version
 ```
@@ -149,6 +187,10 @@ cd /acfs01/acfs/evolutivos/39329591
 # C. RDBMS — dbhome_2 (opatch, como oracle)
 
 ## C1. Versión actual
+
+```bash
+sudo su - oracle
+```
 
 ```bash
 /u02/app/oracle/product/19.0.0.0/dbhome_2/OPatch/opatch version
@@ -193,14 +235,7 @@ cd /acfs01/acfs/evolutivos/39329591
 1. Paso 0 una sola vez, desde el nodo 1.
 2. **Nodo 1:** A (root) → B (oracle) → C (oracle).
 3. Comprobar que el CRS, las instancias y los servicios están bien en el nodo 1.
-4. Repetir A → B → C en los **nodos 2, 3 y 4**.
-5. Verificación final desde el nodo 1:
-
-```bash
-dcli -l oracle -g ~/dbs_group "/u01/app/19.0.0.0/grid/jdk/bin/java -version 2>&1 | head -1"
-dcli -l oracle -g ~/dbs_group "/u02/app/oracle/product/19.0.0.0/dbhome_1/jdk/bin/java -version 2>&1 | head -1"
-dcli -l oracle -g ~/dbs_group "/u02/app/oracle/product/19.0.0.0/dbhome_2/jdk/bin/java -version 2>&1 | head -1"
-```
+4. Repetir A → B → C en los **nodos 2, 3 y 4**, con su comprobación (A6, B5, C5) en cada nodo.
 
 ## Notas
 
