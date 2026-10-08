@@ -102,7 +102,7 @@ cd /home/grid
 
 ```bash
 mv /u01/app/19.0.0.0/grid/OPatch /u01/app/19.0.0.0/grid/OPatch_old_20261008
-unzip -q /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip -d /u01/app/19.0.0.0/grid
+unzip /acfs01/acfs/evolutivos/OPATCH_1220152_p6880880_190000_Linux-x86-64.zip -d /u01/app/19.0.0.0/grid
 chown -R grid:oinstall /u01/app/19.0.0.0/grid/OPatch
 chmod 755 /u01/app/19.0.0.0/grid/OPatch
 ls -ld /u01/app/19.0.0.0/grid/OPatch
@@ -132,8 +132,15 @@ opatchauto apply /acfs01/acfs/evolutivos/39329591 -oh /u01/app/19.0.0.0/grid
 /u01/app/19.0.0.0/grid/jdk/bin/java -version
 /u01/app/19.0.0.0/grid/jdk/jre/bin/java -version
 /u01/app/19.0.0.0/grid/OPatch/jre/bin/java -version
-/u01/app/19.0.0.0/grid/OPatch/opatch lspatches -oh /u01/app/19.0.0.0/grid
 /u01/app/19.0.0.0/grid/bin/crsctl check crs
+```
+
+El `lspatches` se lanza como grid; después, `exit` para volver a root y continuar:
+
+```bash
+su - grid
+/u01/app/19.0.0.0/grid/OPatch/opatch lspatches -oh /u01/app/19.0.0.0/grid
+exit
 ```
 
 ---
@@ -188,9 +195,7 @@ cd /acfs01/acfs/evolutivos/39329591
 
 ## C1. Versión actual
 
-```bash
-sudo su - oracle
-```
+Se sigue como oracle desde el bloque B.
 
 ```bash
 /u02/app/oracle/product/19.0.0.0/dbhome_2/OPatch/opatch version
@@ -242,3 +247,55 @@ cd /acfs01/acfs/evolutivos/39329591
 - **OPatch se descomprime desde el zip en cada home y nodo.** No se mueve un directorio desde el ACFS, porque tras el primer nodo ya no existiría para el resto.
 - **`chown -R` en el Grid**, para que todo el contenido de `OPatch` quede como grid:oinstall.
 - **`.patch_storage`** conserva el JDK anterior como backup. Si el escáner de vulnerabilidades lo vuelve a marcar, el origen es ese.
+
+---
+
+# D. Limpieza: zipear el OPatch antiguo (en cada nodo)
+
+Cuando el nodo esté validado, cada `OPatch_old_20261008` se convierte en un zip dentro de su propio home. Así el escáner deja de detectar el jre antiguo.
+
+Lanza el `rm -rf` solo si el `unzip -t` termina con `No errors detected`. Hace falta `-f`: con `rm -r` solo, pide confirmación por cada fichero protegido contra escritura.
+
+## D1. Grid (como root)
+
+```bash
+cd /u01/app/19.0.0.0/grid
+zip -r OPatch_old_20261008.zip OPatch_old_20261008
+unzip -t OPatch_old_20261008.zip
+rm -rf OPatch_old_20261008
+chown grid:oinstall OPatch_old_20261008.zip
+chmod 640 OPatch_old_20261008.zip
+ls -l OPatch_old_20261008*
+```
+
+## D2. dbhome_1 (como oracle)
+
+```bash
+cd /u02/app/oracle/product/19.0.0.0/dbhome_1
+zip -r OPatch_old_20261008.zip OPatch_old_20261008
+unzip -t OPatch_old_20261008.zip
+rm -rf OPatch_old_20261008
+ls -l OPatch_old_20261008*
+```
+
+## D3. dbhome_2 (como oracle)
+
+```bash
+cd /u02/app/oracle/product/19.0.0.0/dbhome_2
+zip -r OPatch_old_20261008.zip OPatch_old_20261008
+unzip -t OPatch_old_20261008.zip
+rm -rf OPatch_old_20261008
+ls -l OPatch_old_20261008*
+```
+
+En cada home, el `ls -l` final solo debe mostrar el `.zip`.
+
+---
+
+## Nota: JDK del oraemagent (en cada nodo, como root)
+
+```bash
+cd /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common
+zip -r jdk_old_20261008.zip jdk
+rm -rf jdk
+```
