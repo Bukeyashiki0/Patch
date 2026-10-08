@@ -46,7 +46,7 @@ sudo su - grid
 
 ```bash
 mv /acfs01/acfs/evolutivos/39329591 /acfs01/acfs/evolutivos/39329591_old_20261008
-unzip -q /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip -d /acfs01/acfs/evolutivos
+unzip /acfs01/acfs/evolutivos/JUL2026_p39329591_190000_Linux-x86-64.zip -d /acfs01/acfs/evolutivos
 ls -ld /acfs01/acfs/evolutivos/39329591
 exit
 ```
