@@ -80,9 +80,37 @@ ls -ld /acfs01/acfs/evolutivos/39329591
 
 # A. GRID — `/u01/app/19.0.0.0/grid` (opatchauto, como root)
 
+## A0. Verificar el puntero del inventario central (como root, cada nodo de Norte)
+
+En Norte, `/etc/oraInst.loc` puede ser un enlace a `/etc/oraInst_oraemagent.loc`, que apunta a `/oraemagent/app/oraInventory`, un directorio que no existe. Con ese puntero, el `opatchauto` de A4 falla con `OiiiInventoryDoesNotExistException`. En Sur el enlace es correcto.
+
+```bash
+sudo su - root
+ls -l /etc/oraInst.loc
+cat /etc/oraInst.loc
+```
+
+Si apunta a `/u01/app/oraInventory/oraInst.loc` y el contenido es `inventory_loc=/u01/app/oraInventory` / `inst_group=oinstall`, el nodo está bien y se sigue en A1.
+
+Si apunta a cualquier otro sitio, se rehace el enlace igual que en Sur. Por ejemplo, si apunta a `/etc/oraInst_oraemagent.loc`, o a `/u01/app/19.0.0.0/grid/oraInst.loc` (aunque el contenido sea correcto, para que quede idéntico a Sur):
+
+```bash
+cp /etc/oraInst.loc /etc/oraInst.loc_bk_20261009
+cat /u01/app/oraInventory/oraInst.loc
+rm /etc/oraInst.loc
+ln -s /u01/app/oraInventory/oraInst.loc /etc/oraInst.loc
+ls -l /etc/oraInst.loc
+cat /etc/oraInst.loc
+```
+
+- El `cp` guarda el contenido original como backup.
+- El segundo `cat` confirma que existe el fichero de destino del nuevo enlace. Si no existe, no lances el `rm`.
+- El `rm` solo borra el enlace, no el fichero al que apunta.
+- El resultado debe ser `/etc/oraInst.loc -> /u01/app/oraInventory/oraInst.loc`, con `inventory_loc=/u01/app/oraInventory` e `inst_group=oinstall`.
+
 ## A1. Cargar el entorno (como root)
 
-En el nodo 1 ya estás como root tras el paso 0b. En los nodos 2, 3 y 4, entrar primero con `sudo su - root`.
+Se sigue como root desde A0.
 
 ```bash
 cd /home/grid
@@ -290,7 +318,7 @@ rm -rf jdk
 
 1. **Solo en el nodo 1, una vez:** 0a (grid) → 0b (root). El parche queda descomprimido en el ACFS para los 4 nodos.
 2. **En cada nodo:**
-   1. **A (root):** cargar el entorno, actualizar OPatch, `opatchauto -analyze` y `opatchauto apply`. En A6, `su - grid` para el `lspatches` y `exit` para volver a root.
+   1. **A (root):** en Norte, verificar `/etc/oraInst.loc` (A0); cargar el entorno, actualizar OPatch, `opatchauto -analyze` y `opatchauto apply`. En A6, `su - grid` para el `lspatches` y `exit` para volver a root.
    2. **B (oracle):** dbhome_1 con `opatch`.
    3. **C (oracle):** dbhome_2 con `opatch`, sin cambiar de usuario.
 3. Comprobar que el CRS, las instancias y los servicios están bien antes de pasar al siguiente nodo.
@@ -309,6 +337,7 @@ rm -rf jdk
 - **`zip` y `unzip` sin `-q`**, para ver en pantalla la lista de ficheros.
 - **`rm -rf`:** el `-f` es necesario; con `rm -r` solo, pide confirmación por cada fichero protegido contra escritura.
 - **Oraemagent:** sin su `jdk`, el agente de EM no puede arrancar. Para restaurarlo: `unzip /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common/jdk_old_20261008.zip -d /oraemagent/app/oracle/middleware/agent_13.5.0.0.0/oracle_common`.
+- **Inventario central en Norte:** `/etc/oraInst.loc` puede apuntar al inventario del agente de EM, que no existe, y eso rompe `opatchauto`. Se corrige en A0 rehaciendo el enlace a `/u01/app/oraInventory/oraInst.loc`, como en Sur.
 - **`.patch_storage`** conserva el JDK anterior como backup. Si el escáner de vulnerabilidades lo vuelve a marcar, el origen es ese.
 
 ### Rutas del informe y dónde se resuelven
