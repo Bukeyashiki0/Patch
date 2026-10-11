@@ -1,0 +1,9 @@
+select thread#, sequence#, status from v$log where status='CURRENT' order by thread#;
+
+select thread#, max(sequence#) recibida,
+       max(case when applied='YES' then sequence# end) aplicada
+from v$archived_log
+where resetlogs_change# = (select resetlogs_change# from v$database_incarnation where status='CURRENT')
+group by thread# order by thread#;
+
+select thread#, sequence#, block#, status from gv$managed_standby where process like 'MRP%';
